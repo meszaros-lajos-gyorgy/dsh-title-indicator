@@ -1,0 +1,8 @@
+# Bundle layer contributed by dsh-title-indicator.
+#
+# The row is addressed by package name because an installed profile resolves it
+# from node_modules. The host half tracks turn outcomes; the same package's
+# client half writes the browser title through its `dsh.client` declaration.
+- insert:
+    - id: title-indicator
+      name: dsh-title-indicator
