@@ -148,14 +148,6 @@ window.__ModuleLoader__.load({
   cursor: pointer;
 }
 
-.dsh-sounds-controls {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-top: -4px;
-}
 
 .dsh-sounds-volume {
   display: inline-flex;
@@ -168,8 +160,26 @@ window.__ModuleLoader__.load({
   user-select: none;
 }
 
+.dsh-sounds-rowcontrols {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 5px;
+}
+
+.dsh-sounds-rowcontrols .dsh-sounds-volume,
+.dsh-sounds-rowcontrols .dsh-sounds-mute {
+  font-size: 11px;
+  gap: 6px;
+}
+
+.dsh-sounds-rowcontrols .dsh-sounds-mute input {
+  width: 13px;
+  height: 13px;
+}
+
 .dsh-sounds-volume input[type='range'] {
-  width: 96px;
+  width: 84px;
   margin: 0;
   accent-color: var(--dsw-alias-label-primary);
   cursor: pointer;
@@ -606,8 +616,9 @@ window.__ModuleLoader__.load({
     /**
      * Owns the sound choices and the transition playback.
      *
-     * Settings are per browser: the mute flag, the volume and one audio blob per
-     * state live in IndexedDB. The done state has a built-in sound from
+     * Settings are per browser: each state's mute flag, volume and audio blob live
+     * in IndexedDB, so muting one sound leaves the others alone. The done state
+     * has a built-in sound from
      * {@link DEFAULT_SOUNDS}; every other state stays silent until the user picks
      * a file for it. The manager is deliberately injectable so the package test
      * can drive it without a browser.
@@ -625,8 +636,14 @@ window.__ModuleLoader__.load({
 
       const listeners = new Set()
       const custom = {}
-      let muted = false
-      let volume = 1
+      /** Per state: whether its sound is muted. */
+      const muted = {}
+      /** Per state: its playback volume, 0–1. */
+      const volumes = {}
+      for (const state of SOUND_STATES) {
+        muted[state] = false
+        volumes[state] = 1
+      }
       let ready = false
       let currentStop = null
 
@@ -637,7 +654,13 @@ window.__ModuleLoader__.load({
           customNames[state] = typeof custom[state]?.name === 'string' ? custom[state].name : null
           builtIn[state] = typeof DEFAULT_SOUNDS[state] === 'string'
         }
-        return Object.freeze({ ready, muted, volume, custom: customNames, defaults: builtIn })
+        return Object.freeze({
+          ready,
+          muted: { ...muted },
+          volumes: { ...volumes },
+          custom: customNames,
+          defaults: builtIn,
+        })
       }
 
       let snapshot = buildSnapshot()
@@ -655,11 +678,21 @@ window.__ModuleLoader__.load({
 
       const load = async () => {
         try {
-          muted = (await store.read('muted')) === true
-          const storedVolume = await store.read('volume')
-          if (typeof storedVolume === 'number' && storedVolume >= 0 && storedVolume <= 1) volume = storedVolume
+          // The pre-per-state pair (v1.2 and earlier) seeds the default, so an
+          // upgrade keeps the volume the user already chose.
+          const legacyMuted = (await store.read('muted')) === true
+          const legacyVolume = await store.read('volume')
+          const fallbackVolume = typeof legacyVolume === 'number' && legacyVolume >= 0 && legacyVolume <= 1
+            ? legacyVolume
+            : 1
           for (const state of SOUND_STATES) {
+            const storedMuted = await store.read('muted.' + state)
+            const storedVolume = await store.read('volume.' + state)
             const value = await store.read(state)
+            muted[state] = typeof storedMuted === 'boolean' ? storedMuted : legacyMuted
+            volumes[state] = typeof storedVolume === 'number' && storedVolume >= 0 && storedVolume <= 1
+              ? storedVolume
+              : fallbackVolume
             if (value !== null && typeof value === 'object' && value.bytes instanceof ArrayBuffer) {
               custom[state] = value
             }
@@ -680,16 +713,18 @@ window.__ModuleLoader__.load({
           return snapshot
         },
         load,
-        setMuted(value) {
-          muted = value === true
-          void store.write('muted', muted).catch(() => {})
+        setMuted(state, value) {
+          if (!SOUND_STATES.includes(state)) return
+          muted[state] = value === true
+          void store.write('muted.' + state, muted[state]).catch(() => {})
           publish()
         },
-        setVolume(value) {
+        setVolume(state, value) {
+          if (!SOUND_STATES.includes(state)) return
           const numeric = typeof value === 'number' && Number.isFinite(value) ? value : 1
           // The card steps in tenths; keep the stored value on the same grid.
-          volume = Math.round(Math.min(1, Math.max(0, numeric)) * 10) / 10
-          void store.write('volume', volume).catch(() => {})
+          volumes[state] = Math.round(Math.min(1, Math.max(0, numeric)) * 10) / 10
+          void store.write('volume.' + state, volumes[state]).catch(() => {})
           publish()
         },
         /**
@@ -739,20 +774,20 @@ window.__ModuleLoader__.load({
         },
         play(state, options = {}) {
           if (!SOUND_STATES.includes(state)) return
-          if (options.force !== true && muted) return
+          if (options.force !== true && muted[state] === true) return
           const entry = custom[state]
           // A picked file wins; otherwise the state's built-in sound, if any.
           if (entry === undefined) {
             const fallback = DEFAULT_SOUNDS[state]
             if (typeof fallback !== 'string') return
             stopCurrent()
-            currentStop = playAudio(fallback, volume)
+            currentStop = playAudio(fallback, volumes[state])
             return
           }
           if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') return
           const source = URL.createObjectURL(new Blob([entry.bytes], { type: entry.type }))
           stopCurrent()
-          const stop = playAudio(source, volume)
+          const stop = playAudio(source, volumes[state])
           currentStop = () => {
             stop()
             try {
@@ -944,6 +979,29 @@ window.__ModuleLoader__.load({
           errors[entry.state] === undefined
             ? null
             : h('span', { className: 'dsh-sounds-error', role: 'alert' }, errors[entry.state]),
+          h('span', { className: 'dsh-sounds-rowcontrols' },
+            h('label', { className: 'dsh-sounds-volume' },
+              h('input', {
+                type: 'range',
+                min: 0,
+                max: 100,
+                step: 10,
+                value: String(Math.round(snapshot.volumes[entry.state] * 100)),
+                'aria-label': 'Volume for ' + entry.label,
+                onChange: (event) => { sounds.setVolume(entry.state, Number(event.target.value) / 100) },
+              }),
+              h('span', { className: 'dsh-sounds-volume-value' }, Math.round(snapshot.volumes[entry.state] * 100) + '%'),
+            ),
+            h('label', { className: 'dsh-sounds-mute' },
+              h('input', {
+                type: 'checkbox',
+                checked: snapshot.muted[entry.state],
+                'aria-label': 'Mute ' + entry.label,
+                onChange: (event) => { sounds.setMuted(entry.state, event.target.checked) },
+              }),
+              'Mute',
+            ),
+          ),
         ),
         h('span', { className: 'dsh-sounds-actions' },
           h('button', {
@@ -971,31 +1029,8 @@ window.__ModuleLoader__.load({
           h('div', null,
             h('h3', { className: 'dsh-sounds-title' }, 'Sounds'),
             h('p', { className: 'dsh-sounds-description' },
-              'Play a short sound when a thread changes state. A sound fires when the state appears, not on every refresh.'),
+              'Each state has its own sound, volume and mute. A sound fires when the state appears, not on every refresh.'),
           ),
-        ),
-        h('div', { className: 'dsh-sounds-controls' },
-            h('label', { className: 'dsh-sounds-volume' },
-              h('span', null, 'Volume'),
-              h('input', {
-                type: 'range',
-                min: 0,
-                max: 100,
-                step: 10,
-                value: String(Math.round(snapshot.volume * 100)),
-                'aria-label': 'Sound volume',
-                onChange: (event) => { sounds.setVolume(Number(event.target.value) / 100) },
-              }),
-              h('span', { className: 'dsh-sounds-volume-value' }, Math.round(snapshot.volume * 100) + '%'),
-            ),
-            h('label', { className: 'dsh-sounds-mute' },
-              h('input', {
-                type: 'checkbox',
-                checked: snapshot.muted,
-                onChange: (event) => { sounds.setMuted(event.target.checked) },
-              }),
-              'Mute all sounds',
-            ),
         ),
         h('input', {
           ref: fileInput,
@@ -1028,9 +1063,9 @@ window.__ModuleLoader__.load({
         h('div', { className: 'dsh-sounds-rows' }, SOUND_ROWS.map(row)),
         h('p', { className: 'dsh-sounds-footnote' },
           'The done state ships with a built-in sound; the others stay silent until you pick a file. '
-          + '“Choose file…” accepts MP3, WAV (PCM), OGG, M4A and FLAC and keeps the choice in this browser; '
-          + 'a file the browser cannot decode is refused. “Reset” returns to the built-in sound, if there is one; '
-          + 'Test plays even while muted.'),
+          + 'Volume and mute apply to that state alone and stay in this browser. '
+          + '“Choose file…” accepts MP3, WAV (PCM), OGG, M4A and FLAC; a file the browser cannot decode is refused. '
+          + '“Reset” returns to the built-in sound, if there is one; Test plays even while muted.'),
       )
     }
 

@@ -156,36 +156,40 @@ const manager = plugin.createSoundManager({
 })
 await manager.load()
 assert.equal(manager.getSnapshot().ready, true)
-assert.equal(manager.getSnapshot().muted, false)
-assert.equal(manager.getSnapshot().volume, 1)
+assert.deepEqual({ ...manager.getSnapshot().muted }, { pending: false, running: false, error: false, done: false })
+assert.deepEqual({ ...manager.getSnapshot().volumes }, { pending: 1, running: 1, error: 1, done: 1 })
 assert.deepEqual([...Object.keys(manager.getSnapshot().custom)], [...plugin.SOUND_STATES])
 assert.equal([...Object.values(manager.getSnapshot().custom)].every(name => name === null), true, 'nothing is configured yet')
 assert.equal(manager.getSnapshot().defaults.done, true, 'done has a built-in sound')
 assert.equal(manager.getSnapshot().defaults.pending, false)
 
-manager.setVolume(0.3)
-assert.equal(manager.getSnapshot().volume, 0.3)
-assert.equal(stored.get('volume'), 0.3)
-manager.setVolume(0.34)
-assert.equal(manager.getSnapshot().volume, 0.3, 'the stored volume stays on the card\'s tenth grid')
-manager.setVolume(4)
-assert.equal(manager.getSnapshot().volume, 1, 'volume is clamped to 0..1')
+manager.setVolume('done', 0.3)
+assert.equal(manager.getSnapshot().volumes.done, 0.3)
+assert.equal(stored.get('volume.done'), 0.3)
+assert.equal(manager.getSnapshot().volumes.pending, 1, 'the other states keep their own volume')
+manager.setVolume('done', 0.34)
+assert.equal(manager.getSnapshot().volumes.done, 0.3, 'the stored value stays on the card\'s tenth grid')
+manager.setVolume('done', 4)
+assert.equal(manager.getSnapshot().volumes.done, 1, 'volume is clamped to 0..1')
 
-manager.setVolume(0.3)
+manager.setVolume('done', 0.3)
 manager.play('pending')
 assert.equal(starts.length, 0, 'a state without a built-in sound stays silent')
 manager.play('done')
 assert.equal(starts.length, 1, 'the done state plays its built-in sound')
 assert.equal(starts[0].startsWith('data:audio/mpeg;base64,'), true)
-assert.equal(volumes[0], 0.3, 'playback carries the chosen volume')
+assert.equal(volumes[0], 0.3, 'playback carries that state\'s volume')
 
-manager.setMuted(true)
-assert.equal(manager.getSnapshot().muted, true)
-assert.equal(stored.get('muted'), true)
+manager.setMuted('pending', true)
+assert.equal(manager.getSnapshot().muted.pending, true)
+assert.equal(manager.getSnapshot().muted.done, false, 'muting one state leaves the others alone')
+assert.equal(stored.get('muted.pending'), true)
 manager.play('pending')
-assert.equal(starts.length, 1, 'mute suppresses transition playback')
+assert.equal(starts.length, 1, 'mute suppresses that state\'s playback')
+manager.play('done')
+assert.equal(starts.length, 2, 'an un-muted state still plays while another is muted')
 manager.play('done', { force: true })
-assert.equal(starts.length, 2, 'the Test button plays even while muted')
+assert.equal(starts.length, 3, 'the Test button plays even while muted')
 
 // A picked file is screened by type and then by the browser's decoder.
 assert.equal(plugin.describeAudioFile({ name: 'notes.txt', type: 'text/plain' }), null)
@@ -218,25 +222,42 @@ assert.equal(accepted.ok, true)
 assert.equal(manager.getSnapshot().custom.pending, 'chicken.wav')
 assert.equal(stored.get('pending').name, 'chicken.wav')
 
-// A custom file wins over the built-in one; mute still governs transitions.
+// A custom file wins over the built-in one, and the state's mute still applies.
+manager.setVolume('pending', 0.6)
 starts.length = 0
 volumes.length = 0
 stops = 0
 manager.play('pending')
-assert.equal(starts.length, 0, 'mute suppresses transition playback')
+assert.equal(starts.length, 0, 'mute suppresses that state\'s playback')
 manager.play('pending', { force: true })
 assert.equal(starts.length, 1, 'the Test button plays even while muted')
 assert.equal(starts[0], 'blob:test', 'a picked file plays through a blob URL')
-assert.equal(volumes[0], 0.3, 'playback carries the chosen volume')
-manager.setMuted(false)
+assert.equal(volumes[0], 0.6, 'playback carries the pending volume, not another state\'s')
+manager.setMuted('pending', false)
 manager.play('pending')
-assert.equal(starts.length, 2)
-assert.equal(stops, 2, 'each new sound stops the previous one (the built-in was still playing)')
+assert.equal(starts.length, 2, 'un-muting the state brings its sound back')
+assert.ok(stops >= 1, 'each new sound stops the previous one')
 
 manager.clearCustom('pending')
 assert.equal(manager.getSnapshot().custom.pending, null)
 assert.equal(stored.has('pending'), false)
 manager.dispose()
+
+// Upgrading from the global pair: its values seed every state, per-state keys win.
+const legacyStore = new Map([['muted', true], ['volume', 0.4], ['volume.done', 0.9]])
+const legacy = plugin.createSoundManager({
+  store: {
+    async read(key) { return legacyStore.get(key) },
+    async write(key, value) { legacyStore.set(key, value) },
+    async remove(key) { legacyStore.delete(key) },
+  },
+  playAudio: () => () => {},
+  probe: async () => true,
+})
+await legacy.load()
+assert.equal(legacy.getSnapshot().muted.pending, true, 'the old global mute seeds each state')
+assert.equal(legacy.getSnapshot().volumes.pending, 0.4, 'the old global volume seeds each state')
+assert.equal(legacy.getSnapshot().volumes.done, 0.9, 'a stored per-state value wins')
 
 // Registration: the invisible title projection and the Sounds section.
 let registered

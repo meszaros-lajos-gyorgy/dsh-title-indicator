@@ -39,10 +39,9 @@ seeing from anywhere.
 
 ## Sounds
 
-**Settings → Sounds** gives every state its own sound, plus a volume slider and a
-mute switch. The **done** state ships with a built-in sound — a short *tada*
-(`sounds/done.mp3`, 2.1 s) — and the other three stay silent until you pick a
-file for them.
+**Settings → Sounds** gives every state its own sound, **volume and mute**. The
+**done** state ships with a built-in sound — a short *tada* (`sounds/done.mp3`,
+2.1 s) — and the other three stay silent until you pick a file for them.
 
 ![Sounds settings](docs/sounds.png)
 
@@ -51,16 +50,18 @@ file for them.
 | Choose file… | accepts MP3, WAV (PCM), OGG, M4A and FLAC; the browser's decoder is the judge, so an unsupported file (for example the ADPCM WAVs common in old games) is refused with a message and the previous choice stays |
 | Test | plays immediately, even while muted |
 | Reset | returns to the built-in sound, or clears the picked file when the state has none |
-| Volume | 0–100 % in 10 % steps |
-| Mute all sounds | suppresses state transitions (Test still works) |
+| Volume | per state, 0–100 % in 10 % steps |
+| Mute | per state: muting one sound leaves the others playing (Test still works) |
 
 - Sounds play on a state **change**, not on every refresh, and never on page
   load (work already running when you open the tab stays quiet).
 - The pending sound rings for **every new pending interaction** — each approval,
   plan review or question gets its own cluck, even while the marker stays 🟠 for
   an earlier one.
-- Choices live in this browser (IndexedDB): volume, mute and picked files are
-  per browser profile.
+- Choices live in this browser (IndexedDB) and are **per state**: each sound has
+  its own file, volume and mute, so the tada can be muted while a pending cluck
+  keeps playing. An upgrade from the earlier global pair seeds every state with
+  the values the user already had.
 - The tab title is re-asserted every 2 seconds and updated immediately on a
   state change; a `MutationObserver` keeps the marker when the layout rewrites
   the title.
@@ -141,9 +142,10 @@ Egy DSH plugin a Web GUI fülcíméhez: **állapotjelölő** (🟠 vár rád, �
   **🟠 > 🕐 > ⚠️ > ✅**.
 - A `⚠️` és a `✅` csak akkor jelenik meg, ha a leállást távolról láttad (rejtett
   vagy fókusz nélküli lap); amikor visszatérsz, eltűnik.
-- **Hangok**: Settings → Sounds, állapotonként egy fájl, hangerő (10%-os lépések)
-  és némítás. A **kész (✅)** állapothoz van beépített hang (rövid *tada*,
-  `sounds/done.mp3`, 2,1 s), a többi állapot csendes, amíg nem választasz fájlt.
+- **Hangok**: Settings → Sounds, állapotonként **külön** fájl, hangerő
+  (10%-os lépések) és némítás — a tada-t külön némíthatod, a csirke maradhat.
+  A **kész (✅)** állapothoz van beépített hang (rövid *tada*, `sounds/done.mp3`,
+  2,1 s), a többi állapot csendes, amíg nem választasz fájlt.
   A 🟠 hang **minden új kérésnél** megszólal (nem csak akkor, amikor a jelölő
   megjelenik), a többi állapot váltáskor szól.
 - Telepítés: **Plugins → Add plugin** a mappa útvonalával vagy a git címmel,
