@@ -336,6 +336,27 @@ window.__ModuleLoader__.load({
     }
 
     /**
+     * Interaction keys that were not pending at the previous reading.
+     *
+     * A pending approval, plan review or question keeps the title marker at 🟠
+     * for its whole life, so the marker alone cannot tell one request from the
+     * next — and every request deserves its own notification. The interaction
+     * keys can tell them apart.
+     *
+     * @param {ReadonlySet<string>|undefined} previous - pending keys from the previous reading.
+     * @param {ReadonlySet<string>} current - pending keys now.
+     * @returns {string[]} keys that appeared since; empty on the first reading.
+     */
+    function newPendingKeys(previous, current) {
+      if (previous === undefined) return []
+      const added = []
+      for (const key of current) {
+        if (!previous.has(key)) added.push(key)
+      }
+      return added
+    }
+
+    /**
      * Whether a Session's last turn failed at (or just before) the given stop.
      * @param {{at: number, reason: string, code?: string}|undefined} outcome - host turn outcome.
      * @param {number} stopAt - when the stop was observed, Unix epoch ms.
@@ -818,12 +839,28 @@ window.__ModuleLoader__.load({
         }
       }, [])
 
+      // Every new pending interaction rings the pending sound, even while the
+      // marker stays 🟠 for the previous one. The first reading only seeds the
+      // set: opening the page must not fire for a request that was already there.
+      const pendingKeys = useRef(undefined)
+      useEffect(() => {
+        const keys = new Set()
+        for (const status of statuses.values()) {
+          const interaction = status.pendingInteraction
+          if (interaction !== undefined && typeof interaction.key === 'string') keys.add(interaction.key)
+        }
+        const added = newPendingKeys(pendingKeys.current, keys)
+        pendingKeys.current = keys
+        if (added.length > 0) sounds.play('pending')
+      }, [statuses, sounds])
+
       const stopList = [...stops.entries()].map(([id, at]) => ({ at, error: stopWasError(outcomes[id], at) }))
       const prefix = titlePrefix({ running: running.size > 0, pending, unread, stops: stopList })
       useEffect(() => { title.set(prefix) }, [prefix, title])
 
-      // One sound per state change. The first evaluation only records the state:
-      // opening the page must not fire a notification for work already running.
+      // One sound per state change for the three aggregate states. Pending is
+      // handled by the interaction-key watcher above, which fires for every new
+      // request instead of only when the marker appears.
       useEffect(() => {
         const next = soundStateOf(prefix)
         if (soundState.current === undefined) {
@@ -832,7 +869,7 @@ window.__ModuleLoader__.load({
         }
         if (next === soundState.current) return
         soundState.current = next
-        if (next !== null) sounds.play(next)
+        if (next !== null && next !== 'pending') sounds.play(next)
       }, [prefix, sounds])
 
       // Leaving the tree (shell teardown) restores the bare title.
@@ -1009,6 +1046,7 @@ window.__ModuleLoader__.load({
     exports.composeTitle = composeTitle
     exports.titlePrefix = titlePrefix
     exports.soundStateOf = soundStateOf
+    exports.newPendingKeys = newPendingKeys
     exports.stoppedSince = stoppedSince
     exports.stopWasError = stopWasError
     exports.isAway = isAway

@@ -101,6 +101,13 @@ assert.equal(plugin.soundStateOf(''), null)
 assert.deepEqual([...plugin.SOUND_ROWS.map(row => row.state)], [...plugin.SOUND_STATES])
 assert.equal(plugin.DEFAULT_SOUNDS, undefined, 'no sound file ships with the package')
 
+// Every new pending interaction earns its own notification.
+assert.deepEqual([...plugin.newPendingKeys(undefined, new Set(['a']))], [], 'the first reading is silent')
+assert.deepEqual([...plugin.newPendingKeys(new Set(['a']), new Set(['a', 'b']))], ['b'])
+assert.deepEqual([...plugin.newPendingKeys(new Set(['a']), new Set(['a']))], [], 'a request that is still pending does not ring again')
+assert.deepEqual([...plugin.newPendingKeys(new Set(['a']), new Set(['a', 'b', 'c']))].sort(), ['b', 'c'])
+assert.deepEqual([...plugin.newPendingKeys(new Set(['a', 'b']), new Set(['a']))], [], 'resolving a request is not news')
+
 // Stop detection only reports ids that left the running set.
 const previous = new Set(['a', 'b', 'c'])
 const running = new Set(['b'])

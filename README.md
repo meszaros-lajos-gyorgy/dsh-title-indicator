@@ -55,6 +55,9 @@ until you pick one.
 
 - Sounds play on a state **change**, not on every refresh, and never on page
   load (work already running when you open the tab stays quiet).
+- The pending sound rings for **every new pending interaction** — each approval,
+  plan review or question gets its own cluck, even while the marker stays 🟠 for
+  an earlier one.
 - Choices live in this browser (IndexedDB): volume, mute and picked files are
   per browser profile.
 - The tab title is re-asserted every 2 seconds and updated immediately on a
@@ -139,6 +142,8 @@ Egy DSH plugin a Web GUI fülcíméhez: **állapotjelölő** (🟠 vár rád, �
   vagy fókusz nélküli lap); amikor visszatérsz, eltűnik.
 - **Hangok**: Settings → Sounds, állapotonként egy fájl, hangerő (10%-os lépések)
   és némítás. **Alapból nincs hang a csomagban** — válassz magadnak fájlt.
+  A 🟠 hang **minden új kérésnél** megszólal (nem csak akkor, amikor a jelölő
+  megjelenik), a többi állapot váltáskor szól.
 - Telepítés: **Plugins → Add plugin** a mappa útvonalával vagy a git címmel,
   majd **F5**.
 - A hang és a hangerő a böngésződben marad (IndexedDB), másik böngészőben nem.
