@@ -99,7 +99,8 @@ assert.equal(plugin.soundStateOf('⚠️ '), 'error')
 assert.equal(plugin.soundStateOf('✅ '), 'done')
 assert.equal(plugin.soundStateOf(''), null)
 assert.deepEqual([...plugin.SOUND_ROWS.map(row => row.state)], [...plugin.SOUND_STATES])
-assert.equal(plugin.DEFAULT_SOUNDS, undefined, 'no sound file ships with the package')
+assert.equal(plugin.DEFAULT_SOUNDS.done.startsWith('data:audio/mpeg;base64,'), true, 'the done sound ships inside the bundle')
+assert.equal(plugin.DEFAULT_SOUNDS.pending, undefined, 'the other states ship no sound')
 
 // Every new pending interaction earns its own notification.
 assert.deepEqual([...plugin.newPendingKeys(undefined, new Set(['a']))], [], 'the first reading is silent')
@@ -159,6 +160,8 @@ assert.equal(manager.getSnapshot().muted, false)
 assert.equal(manager.getSnapshot().volume, 1)
 assert.deepEqual([...Object.keys(manager.getSnapshot().custom)], [...plugin.SOUND_STATES])
 assert.equal([...Object.values(manager.getSnapshot().custom)].every(name => name === null), true, 'nothing is configured yet')
+assert.equal(manager.getSnapshot().defaults.done, true, 'done has a built-in sound')
+assert.equal(manager.getSnapshot().defaults.pending, false)
 
 manager.setVolume(0.3)
 assert.equal(manager.getSnapshot().volume, 0.3)
@@ -170,11 +173,19 @@ assert.equal(manager.getSnapshot().volume, 1, 'volume is clamped to 0..1')
 
 manager.setVolume(0.3)
 manager.play('pending')
-assert.equal(starts.length, 0, 'with no sound picked the state stays silent')
+assert.equal(starts.length, 0, 'a state without a built-in sound stays silent')
+manager.play('done')
+assert.equal(starts.length, 1, 'the done state plays its built-in sound')
+assert.equal(starts[0].startsWith('data:audio/mpeg;base64,'), true)
+assert.equal(volumes[0], 0.3, 'playback carries the chosen volume')
 
 manager.setMuted(true)
 assert.equal(manager.getSnapshot().muted, true)
 assert.equal(stored.get('muted'), true)
+manager.play('pending')
+assert.equal(starts.length, 1, 'mute suppresses transition playback')
+manager.play('done', { force: true })
+assert.equal(starts.length, 2, 'the Test button plays even while muted')
 
 // A picked file is screened by type and then by the browser's decoder.
 assert.equal(plugin.describeAudioFile({ name: 'notes.txt', type: 'text/plain' }), null)
@@ -207,7 +218,10 @@ assert.equal(accepted.ok, true)
 assert.equal(manager.getSnapshot().custom.pending, 'chicken.wav')
 assert.equal(stored.get('pending').name, 'chicken.wav')
 
-// Mute governs transition playback; Test ignores it.
+// A custom file wins over the built-in one; mute still governs transitions.
+starts.length = 0
+volumes.length = 0
+stops = 0
 manager.play('pending')
 assert.equal(starts.length, 0, 'mute suppresses transition playback')
 manager.play('pending', { force: true })
@@ -217,7 +231,7 @@ assert.equal(volumes[0], 0.3, 'playback carries the chosen volume')
 manager.setMuted(false)
 manager.play('pending')
 assert.equal(starts.length, 2)
-assert.equal(stops, 1, 'starting a new sound stops the previous one')
+assert.equal(stops, 2, 'each new sound stops the previous one (the built-in was still playing)')
 
 manager.clearCustom('pending')
 assert.equal(manager.getSnapshot().custom.pending, null)

@@ -1,6 +1,6 @@
 {
   "name": "dsh-title-indicator",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Thread-status marker and optional notification sounds in the DeepSeek Harness Web GUI tab title.",
   "license": "MIT",
   "author": "Mészáros Lajos György",
@@ -37,6 +37,7 @@
     "client.js",
     "cordis.patch.yml",
     "docs",
+    "sounds",
     "LICENSE",
     "README.md"
   ],

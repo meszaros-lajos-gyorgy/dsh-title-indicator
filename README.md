@@ -40,8 +40,9 @@ seeing from anywhere.
 ## Sounds
 
 **Settings → Sounds** gives every state its own sound, plus a volume slider and a
-mute switch. **No sound file ships with the package** — a state stays silent
-until you pick one.
+mute switch. The **done** state ships with a built-in sound — a short *tada*
+(`sounds/done.mp3`, 2.1 s) — and the other three stay silent until you pick a
+file for them.
 
 ![Sounds settings](docs/sounds.png)
 
@@ -49,7 +50,7 @@ until you pick one.
 |---|---|
 | Choose file… | accepts MP3, WAV (PCM), OGG, M4A and FLAC; the browser's decoder is the judge, so an unsupported file (for example the ADPCM WAVs common in old games) is refused with a message and the previous choice stays |
 | Test | plays immediately, even while muted |
-| Reset | clears the picked file |
+| Reset | returns to the built-in sound, or clears the picked file when the state has none |
 | Volume | 0–100 % in 10 % steps |
 | Mute all sounds | suppresses state transitions (Test still works) |
 
@@ -107,8 +108,8 @@ node test/client.test.mjs
 
 Covers the four precedence rules, marker composition and stripping, the
 running→stopped transition, the failure window, the marker→sound mapping, the
-sound manager (volume grid, mute, `force` testing, file screening, decode
-refusal, reset, IndexedDB mock), both slot registrations and the host route.
+sound manager (built-in done sound, volume grid, mute, `force` testing, file
+screening, decode refusal, reset, IndexedDB mock), both slot registrations and the host route.
 
 ## Limitations
 
@@ -141,7 +142,8 @@ Egy DSH plugin a Web GUI fülcíméhez: **állapotjelölő** (🟠 vár rád, �
 - A `⚠️` és a `✅` csak akkor jelenik meg, ha a leállást távolról láttad (rejtett
   vagy fókusz nélküli lap); amikor visszatérsz, eltűnik.
 - **Hangok**: Settings → Sounds, állapotonként egy fájl, hangerő (10%-os lépések)
-  és némítás. **Alapból nincs hang a csomagban** — válassz magadnak fájlt.
+  és némítás. A **kész (✅)** állapothoz van beépített hang (rövid *tada*,
+  `sounds/done.mp3`, 2,1 s), a többi állapot csendes, amíg nem választasz fájlt.
   A 🟠 hang **minden új kérésnél** megszólal (nem csak akkor, amikor a jelölő
   megjelenik), a többi állapot váltáskor szól.
 - Telepítés: **Plugins → Add plugin** a mappa útvonalával vagy a git címmel,
